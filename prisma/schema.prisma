@@ -26,6 +26,8 @@ model ScheduledMessage {
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
+  @@index([senderPhone, status], name: "scheduled_messages_sender_status_idx")
+  @@index([scheduledAt], name: "scheduled_messages_scheduled_at_idx")
   @@map("scheduled_messages")
 }
 
@@ -40,4 +42,17 @@ model PendingConversation {
   updatedAt      DateTime @updatedAt
 
   @@map("pending_conversations")
+}
+
+model MessageViewStats {
+  id             Int      @id @default(autoincrement())
+  senderPhone    String   @unique // phone number of the user viewing messages
+  totalViews     Int      @default(0)  // total number of view requests
+  lastViewedAt   DateTime @default(now())
+  lastOffset     Int      @default(0)  // last pagination offset
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([senderPhone], name: "message_view_stats_sender_idx")
+  @@map("message_view_stats")
 }

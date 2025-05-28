@@ -8,9 +8,13 @@ import {
   INVALID_MESSAGE, 
   MISSING_DATE_MESSAGE, 
   MISSING_PHONE_MESSAGE, 
-  MISSING_TIME_MESSAGE 
+  MISSING_TIME_MESSAGE,
+  NO_MESSAGES,
+  NO_MORE_MESSAGES
 } from '@/constants/messages';
 import { prisma } from '@/lib/prisma';
+import { handleViewMessages } from './handlers/viewMessages';
+import { parseViewMessageRequest } from '@/utils/messageViewParser';
 
 // Path for auth files
 const AUTH_FOLDER_PATH = join(process.cwd(), '.auth');
@@ -179,6 +183,11 @@ export async function connectToWhatsApp() {
       console.log('Got messages:', messages);
       
       for (const message of messages) {
+        // Skip messages sent by the bot itself
+        if (message.key.fromMe) {
+          console.log('Skipping message from bot itself');
+          continue;
+        }
 
         const senderPhone = message.key.remoteJid?.replace('@s.whatsapp.net', '') || '';
         const messageText = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
@@ -187,7 +196,9 @@ export async function connectToWhatsApp() {
             MISSING_TIME_MESSAGE,
             MISSING_DATE_MESSAGE,
             MISSING_PHONE_MESSAGE,
-            INVALID_MESSAGE
+            INVALID_MESSAGE,
+            NO_MESSAGES,
+            NO_MORE_MESSAGES
           ].includes(messageText)
           || messageText.includes('¡Mensaje programado con éxito!')
         ) continue;
@@ -206,7 +217,41 @@ export async function connectToWhatsApp() {
         }
 
         try {
-          // Call the NLP scheduling API
+          // First check if this is a view messages request
+          const viewRequest = parseViewMessageRequest(messageText);
+          if (viewRequest.isValid) {
+            // Handle view messages request
+            const result = await handleViewMessages({
+              message,
+              senderPhone: senderPhoneWithPrefix,
+              offset: 0
+            });
+
+            let replyMessage = '';
+            switch (result.type) {
+              case 'SHOW_MESSAGES':
+                replyMessage = `${result.data.header}\n\n${result.data.messages.map(msg => 
+                  `📅 ${msg.date}\n📱 ${msg.recipient}\n💬 ${msg.content}`
+                ).join('\n\n')}${result.data.footer ? `\n\n${result.data.footer}` : ''}`;
+                break;
+              case 'NO_MESSAGES':
+                replyMessage = 'No tienes mensajes programados.';
+                break;
+              case 'NO_MORE_MESSAGES':
+                replyMessage = 'No hay más mensajes para mostrar.';
+                break;
+              case 'ERROR':
+                replyMessage = result.error;
+                break;
+            }
+
+            await sock.sendMessage(message.key.remoteJid!, {
+              text: replyMessage
+            });
+            continue;
+          }
+
+          // If not a view request, proceed with NLP scheduling
           const response = await fetch(SCHEDULE_ENDPOINT, {
             method: 'POST',
             headers: {
