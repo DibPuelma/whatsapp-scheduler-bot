@@ -15,19 +15,20 @@ datasource db {
 }
 
 model ScheduledMessage {
-  id          Int      @id @default(autoincrement())
-  phone       String   // recipient's phone number
-  senderPhone String   // phone number of the user scheduling the message
-  content     String
-  scheduledAt DateTime
-  status      String   // pending, sent, failed
-  sentAt      DateTime?
-  error       String?
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  jobId                    String   @id @default(cuid()) // unique identifier for the scheduled job
+  userId                   String   // WhatsApp ID of the user who scheduled the message
+  recipientIdentifier      String   // resolved phone number
+  originalRecipientString  String   // the exact recipient string user provided
+  messageContent           String   // full text of the message
+  scheduledTimestampUTC    DateTime // resolved date and time in UTC
+  originalUserDateTimeString String  // the exact date/time string user provided
+  userTimeZoneOffset       Int?     // optional, for future reference or potential display adjustments
+  status                   String   // PENDING, SENT, FAILED_TO_SEND, CANCELLED
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
 
-  @@index([senderPhone, status], name: "scheduled_messages_sender_status_idx")
-  @@index([scheduledAt], name: "scheduled_messages_scheduled_at_idx")
+  @@index([userId, status], name: "scheduled_messages_user_status_idx")
+  @@index([scheduledTimestampUTC], name: "scheduled_messages_timestamp_idx")
   @@map("scheduled_messages")
 }
 
@@ -55,4 +56,17 @@ model MessageViewStats {
 
   @@index([senderPhone], name: "message_view_stats_sender_idx")
   @@map("message_view_stats")
+}
+
+model WhatsAppLink {
+  id          Int      @id @default(autoincrement())
+  phoneNumber String   @unique // The user's WhatsApp phone number
+  status     String   // active, inactive, disconnected
+  lastActive DateTime @default(now())
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([phoneNumber], name: "whatsapp_link_phone_idx")
+  @@index([status], name: "whatsapp_link_status_idx")
+  @@map("whatsapp_links")
 }
