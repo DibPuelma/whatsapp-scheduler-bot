@@ -12,7 +12,7 @@ interface WhatsAppState {
   lastError: string | null;
 }
 
-class WhatsAppManager {
+export class WhatsAppManager {
   private static instance: WhatsAppManager;
   private state: WhatsAppState = {
     socket: null,
@@ -75,9 +75,16 @@ class WhatsAppManager {
           return false;
         }
         
-        // Always process messages sent by the user themselves (commands to the bot)
+        // Skip messages sent by the bot itself to prevent feedback loops
+        // Only process user commands sent by the account owner (fromMe) if they start with /
         if (message.key.fromMe) {
-          return true;
+          const supportedCommands = ['/schedule', '/list', '/cancel', '/help', '/status'];
+          const isCommand = supportedCommands.some(cmd => messageText.startsWith(cmd));
+          if (!isCommand) {
+            console.log('Skipping non-command message from bot itself to prevent feedback loop:', messageText.substring(0, 50));
+            return false;
+          }
+          console.log('Processing command message from account owner:', messageText);
         }
         
         // Check if message is from a whitelisted number
@@ -346,4 +353,10 @@ export async function resetConnection(): Promise<void> {
 
 export async function sendWhatsAppMessage(targetJid: string, content: string): Promise<boolean> {
   return manager.sendMessage(targetJid, content);
+}
+
+export async function sendMessage(recipientId: string, content: string): Promise<void> {
+  // TODO: Implement actual message sending using Baileys
+  // This is a placeholder that will be implemented when we have the Baileys client setup
+  console.log(`[MOCK] Sending message to ${recipientId}: ${content}`);
 } 
