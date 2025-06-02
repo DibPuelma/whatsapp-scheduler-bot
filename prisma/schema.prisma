@@ -14,6 +14,13 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
+enum MessageStatus {
+  PENDING
+  SENT
+  FAILED_TO_SEND
+  CANCELLED
+}
+
 model ScheduledMessage {
   jobId                    String   @id @default(cuid()) // unique identifier for the scheduled job
   userId                   String   // WhatsApp ID of the user who scheduled the message
@@ -23,7 +30,7 @@ model ScheduledMessage {
   scheduledTimestampUTC    DateTime // resolved date and time in UTC
   originalUserDateTimeString String  // the exact date/time string user provided
   userTimeZoneOffset       Int?     // optional, for future reference or potential display adjustments
-  status                   String   // PENDING, SENT, FAILED_TO_SEND, CANCELLED
+  status                   MessageStatus // Using the enum instead of String
   createdAt               DateTime @default(now())
   updatedAt               DateTime @updatedAt
 
