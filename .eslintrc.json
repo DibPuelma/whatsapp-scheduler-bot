@@ -1,0 +1,19 @@
+{
+  "extends": [
+    "next/core-web-vitals",
+    "plugin:@typescript-eslint/recommended"
+  ],
+  "rules": {
+    "react-hooks/rules-of-hooks": ["error", {
+      "additionalHooks": "(useStore|useSelector|useDispatch)"
+    }]
+  },
+  "overrides": [
+    {
+      "files": ["src/lib/whatsapp.ts", "src/lib/baileys/**/*.ts"],
+      "rules": {
+        "react-hooks/rules-of-hooks": "off"
+      }
+    }
+  ]
+} 

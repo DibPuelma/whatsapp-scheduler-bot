@@ -1,82 +1,99 @@
 import { WAMessage } from '@whiskeysockets/baileys';
 import { parseScheduleCommand } from './commandParser';
-import { 
-  isValidPhoneNumber, 
-  isValidContactName, 
-  isValidMessageContent, 
-  isValidDateTimeFormat 
-} from './validation';
+import { resolveRecipient } from './recipientResolver';
+import { parseDateTimeToUTC } from './dateTimeParser';
+import { createScheduledMessage } from './schedulerService';
+import { sendResponseToUser } from '@/utils/whatsappSender';
+import { formatMessage, MessageType } from '@/utils/messageFormatter';
+import { isValidMessageContent } from './validation';
 
 interface ScheduleCommandHandlerParams {
   message: WAMessage;
-  senderPhone: string;  // Keep in interface for future use
+  senderPhone: string;
 }
 
-interface ScheduleCommandResult {
-  type: 'SUCCESS' | 'ERROR';
-  message: string;
-}
-
-export async function handleScheduleCommand({ message }: ScheduleCommandHandlerParams): Promise<ScheduleCommandResult> {
+export async function handleScheduleCommand({ message, senderPhone }: ScheduleCommandHandlerParams): Promise<void> {
   const messageText = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
 
-  // Parse the command
-  const parseResult = parseScheduleCommand(messageText);
-  if (!parseResult.success) {
-    return {
-      type: 'ERROR',
-      message: parseResult.error.message
-    };
-  }
+  try {
+    // Parse the command
+    const parseResult = parseScheduleCommand(messageText);
+    if (!parseResult.success) {
+      const messageType: MessageType = 
+        parseResult.error.type === 'MISSING_RECIPIENT' ? 'ERROR_MISSING_RECIPIENT' :
+        parseResult.error.type === 'MISSING_DATETIME' ? 'ERROR_MISSING_DATETIME' :
+        parseResult.error.type === 'MISSING_MESSAGE' ? 'ERROR_MISSING_MESSAGE' :
+        'ERROR_INTERNAL';
+      
+      await sendResponseToUser(senderPhone, formatMessage(messageType));
+      return;
+    }
 
-  const { recipient, dateTimeString, messageContent } = parseResult.data;
+    // Resolve recipient
+    const recipientResult = resolveRecipient(parseResult.data.recipient);
+    if (!recipientResult.success) {
+      await sendResponseToUser(senderPhone, formatMessage('ERROR_INVALID_PHONE', {
+        recipientPhone: parseResult.data.recipient
+      }));
+      return;
+    }
 
-  // Validate recipient (could be a phone number or contact name)
-  const isPhone = recipient.startsWith('+');
-  if (isPhone && !isValidPhoneNumber(recipient)) {
-    return {
-      type: 'ERROR',
-      message: 'El número de teléfono no es válido. Debe estar en formato internacional (ejemplo: +1234567890).'
-    };
-  }
-  
-  if (!isPhone && !isValidContactName(recipient)) {
-    return {
-      type: 'ERROR',
-      message: 'El nombre del contacto no es válido. Debe contener al menos 2 caracteres y no puede contener caracteres especiales.'
-    };
-  }
+    // Parse date and time
+    const dateTimeResult = parseDateTimeToUTC(parseResult.data.dateTimeString, message);
+    if (!dateTimeResult.success) {
+      const messageType: MessageType = 
+        dateTimeResult.error.type === 'PAST_DATE' ? 'ERROR_PAST_DATETIME' :
+        dateTimeResult.error.type === 'AMBIGUOUS' ? 'ERROR_AMBIGUOUS_DATETIME' :
+        'ERROR_INVALID_DATETIME';
+      
+      await sendResponseToUser(senderPhone, formatMessage(messageType));
+      return;
+    }
 
-  // Validate date/time format
-  if (!isValidDateTimeFormat(dateTimeString)) {
-    return {
-      type: 'ERROR',
-      message: 'El formato de fecha/hora no es válido. Ejemplos válidos:\n' +
-        '- 2024-12-25 10:30\n' +
-        '- 09:30 (para hoy)\n' +
-        '- mañana 15:45\n' +
-        '- próximo lunes 08:00'
-    };
-  }
+    // Validate message content
+    if (!isValidMessageContent(parseResult.data.messageContent)) {
+      await sendResponseToUser(senderPhone, formatMessage('ERROR_INVALID_MESSAGE', {
+        messageContent: parseResult.data.messageContent
+      }));
+      return;
+    }
 
-  // Validate message content
-  if (!isValidMessageContent(messageContent)) {
-    return {
-      type: 'ERROR',
-      message: 'El contenido del mensaje no es válido. Debe tener entre 1 y 1000 caracteres.'
-    };
-  }
+    // Create scheduled message
+    const createResult = await createScheduledMessage({
+      userId: senderPhone,
+      recipient: recipientResult.data,
+      dateTime: dateTimeResult.data,
+      messageContent: parseResult.data.messageContent
+    });
 
-  // TODO: This will be implemented in the next tasks:
-  // - Date/time parsing into UTC timestamp
-  // - Recipient resolution (contact name to phone number)
-  // - Message scheduling in database
-  return {
-    type: 'SUCCESS',
-    message: `Comando validado correctamente:\n` +
-      `📱 Destinatario: ${recipient}\n` +
-      `⏰ Fecha/Hora: ${dateTimeString}\n` +
-      `💬 Mensaje: ${messageContent}\n\n` +
-      `La funcionalidad de programación será implementada próximamente.`
-  };
+    if (!createResult.success) {
+      await sendResponseToUser(senderPhone, formatMessage('ERROR_LIMIT_REACHED', {
+        limit: createResult.error.maxAllowed
+      }));
+      return;
+    }
+
+    // Convert UTC time back to Chile time for display
+    const chileTime = new Date(createResult.data.scheduledTimestampUTC.getTime() + (4 * 60 * 60 * 1000)); // Add 4 hours to convert from UTC to Chile time
+    
+    // Format the date in Spanish Chile locale
+    const formattedDate = chileTime.toLocaleString('es-CL', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: true
+    });
+
+    // Send success message
+    await sendResponseToUser(senderPhone, formatMessage('SUCCESS_SCHEDULE', {
+      dateTime: formattedDate
+    }));
+  } catch (error) {
+    // Handle any unexpected errors
+    await sendResponseToUser(senderPhone, formatMessage('ERROR_INTERNAL', {
+      error: error instanceof Error ? error.message : 'Error desconocido'
+    }));
+  }
 } 
