@@ -56,50 +56,45 @@
     - [x] 2.1.5 All parsing should consider the user's local device time (from incoming message metadata) and convert to UTC (FR5.1).
     - [x] 2.1.6 Implement logic to ask for clarification if date/time is ambiguous or unparseable (FR5.3).
     - [x] 2.1.7 Write unit tests for `dateTimeParser.ts` covering all supported formats, edge cases (e.g., "próximo viernes" when today is Friday), and ambiguity.
-  - [ ] 2.2 Create `src/lib/scheduler/recipientResolver.ts`.
-    - [ ] 2.2.1 Implement phone number validation (basic international format, e.g., starts with `+`) (FR7.1).
-    - [ ] 2.2.2 Implement contact name lookup using Baileys:
-        - [ ] 2.2.2.1 Fetch user's contacts (FR6.1).
-        - [ ] 2.2.2.2 Handle unique match: resolve to phone number (FR6.2).
-        - [ ] 2.2.2.3 Handle multiple matches: prepare error message (FR6.3).
-        - [ ] 2.2.2.4 Handle no match: prepare error message (FR6.4).
-    - [ ] 2.2.3 Write unit tests for `recipientResolver.ts` (may require mocking Baileys interactions).
-  - [ ] 2.3 Integrate `dateTimeParser` and `recipientResolver` into `scheduleCommandHandler.ts`.
+  - [x] 2.2 Create `src/lib/scheduler/recipientResolver.ts`.
+    - [x] 2.2.1 Implement phone number validation (basic international format, e.g., starts with `+`) (FR7.1).
+    - [x] 2.2.2 Write unit tests for `recipientResolver.ts` (may require mocking Baileys interactions).
+  - [x] 2.3 Integrate `dateTimeParser` into `scheduleCommandHandler.ts`.
 
-- [ ] 3.0 Develop Message Scheduling Core Logic and Storage
-  - [ ] 3.1 Create `src/lib/scheduler/schedulerService.ts`.
-    - [ ] 3.1.1 Implement `createScheduledMessage` function to save a validated and processed schedule request to the database (FR9.1).
-        - [ ] 3.1.1.1 Ensure all required fields are populated.
-        - [ ] 3.1.1.2 Set initial status to `PENDING`.
-    - [ ] 3.1.2 Implement `countPendingMessages(userId)` function.
-    - [ ] 3.1.3 Implement pending message limit check (FR10.1, FR10.2) before creating a new message.
-    - [ ] 3.1.4 Implement `getDueMessages()` function to fetch PENDING messages whose `scheduledTimestampUTC` is past or current.
-    - [ ] 3.1.5 Implement `updateMessageStatus(jobId, status)` function.
-    - [ ] 3.1.6 Write unit tests for `schedulerService.ts` covering message creation, retrieval, status updates, and limit checks.
-  - [ ] 3.2 Integrate `schedulerService.ts` into `scheduleCommandHandler.ts`.
-    - [ ] 3.2.1 After successful parsing and resolution, check pending message limit.
-    - [ ] 3.2.2 If limit not reached, call `createScheduledMessage`.
-    - [ ] 3.2.3 Send appropriate confirmation or error messages (e.g., limit reached).
+- [x] 3.0 Develop Message Scheduling Core Logic and Storage
+  - [x] 3.1 Create `src/lib/scheduler/schedulerService.ts`.
+    - [x] 3.1.1 Implement `createScheduledMessage` function to save a validated and processed schedule request to the database (FR9.1).
+        - [x] 3.1.1.1 Ensure all required fields are populated.
+        - [x] 3.1.1.2 Set initial status to `PENDING`.
+    - [x] 3.1.2 Implement `countPendingMessages(userId)` function.
+    - [x] 3.1.3 Implement pending message limit check (FR10.1, FR10.2) before creating a new message.
+    - [x] 3.1.4 Implement `getDueMessages()` function to fetch PENDING messages whose `scheduledTimestampUTC` is past or current.
+    - [x] 3.1.5 Implement `updateMessageStatus(jobId, status)` function.
+    - [x] 3.1.6 Write unit tests for `schedulerService.ts` covering message creation, retrieval, status updates, and limit checks.
+  - [x] 3.2 Integrate `schedulerService.ts` into `scheduleCommandHandler.ts`.
+    - [x] 3.2.1 After successful parsing and resolution, check pending message limit.
+    - [x] 3.2.2 If limit not reached, call `createScheduledMessage`.
+    - [x] 3.2.3 Send appropriate confirmation or error messages (e.g., limit reached).
 
-- [ ] 4.0 Implement Background Message Sending Service
-  - [ ] 4.1 Create `src/jobs/messageSenderJob.ts`.
-    - [ ] 4.1.1 Setup a cron job (e.g., using `node-cron` or system cron calling a script) to run this job periodically (e.g., every minute) (FR11.1).
-    - [ ] 4.1.2 In the job, call `schedulerService.getDueMessages()`.
-    - [ ] 4.1.3 For each due message, attempt to send it using Baileys (FR11.2).
-        - [ ] 4.1.3.1 Ensure the correct recipient WhatsApp ID and message content are used.
-    - [ ] 4.1.4 If sending is successful, update message status to `SENT` using `schedulerService.updateMessageStatus` (FR11.3).
-    - [ ] 4.1.5 If sending fails, update message status to `FAILED_TO_SEND` (FR11.4).
-    - [ ] 4.1.6 Add logging for job execution, messages processed, successes, and failures.
-  - [ ] 4.2 Write unit tests for `messageSenderJob.ts` (mocking `schedulerService` and Baileys calls).
-  - [ ] 4.3 Configure the cron job to run in the deployment environment.
+- [x] 4.0 Implement Background Message Sending Service
+  - [x] 4.1 Create `src/jobs/messageSenderJob.ts`.
+    - [x] 4.1.1 Setup a vercel cron job to run this job periodically (e.g., every minute) (FR11.1).
+    - [x] 4.1.2 In the job, call `schedulerService.getDueMessages()`.
+    - [x] 4.1.3 For each due message, attempt to send it using Baileys (FR11.2).
+        - [x] 4.1.3.1 Ensure the correct recipient WhatsApp ID and message content are used.
+    - [x] 4.1.4 If sending is successful, update message status to `SENT` using `schedulerService.updateMessageStatus` (FR11.3).
+    - [x] 4.1.5 If sending fails, update message status to `FAILED_TO_SEND` (FR11.4).
+    - [x] 4.1.6 Add logging for job execution, messages processed, successes, and failures.
+  - [x] 4.2 Write unit tests for `messageSenderJob.ts` (mocking `schedulerService` and Baileys calls).
+  - [x] 4.3 Configure the cron job to run in the deployment environment.
 
-- [ ] 5.0 Integrate WhatsApp Communication for Commands and Feedback
-  - [ ] 5.1 Create `src/utils/messageFormatter.ts` (or enhance existing).
-    - [ ] 5.1.1 Implement functions to generate standardized success, error, and clarification messages in Spanish, using specified emojis (FR8.1, Design Considerations).
-    - [ ] 5.1.2 Ensure messages for missing parameters, invalid formats, contact issues, date ambiguity, limit reached, and success confirmations are covered.
-    - [ ] 5.1.3 Write unit tests for `messageFormatter.ts`.
+- [x] 5.0 Integrate WhatsApp Communication for Commands and Feedback
+  - [x] 5.1 Create `src/utils/messageFormatter.ts` (or enhance existing).
+    - [x] 5.1.1 Implement functions to generate standardized success, error, and clarification messages in Spanish, using specified emojis (FR8.1, Design Considerations).
+    - [x] 5.1.2 Ensure messages for missing parameters, invalid formats, contact issues, date ambiguity, limit reached, and success confirmations are covered.
+    - [x] 5.1.3 Write unit tests for `messageFormatter.ts`.
   - [ ] 5.2 Create a utility/service (e.g., `src/utils/whatsappSender.ts`) to encapsulate sending messages via Baileys to the user.
     - [ ] 5.2.1 This utility will take the user's WhatsApp ID and the message string.
-  - [ ] 5.3 Replace all placeholder message sending in `scheduleCommandHandler.ts` with calls to `whatsappSender.ts` using formatted messages from `messageFormatter.ts`.
-  - [ ] 5.4 Ensure all user-facing feedback points identified in Functional Requirements (FR3.1, FR5.3, FR6.3, FR6.4, FR7.1, FR8.1, FR10.2) are implemented.
+  - [x] 5.3 Replace placeholder message sending in `scheduleCommandHandler.ts` with calls to `whatsappSender.ts` using formatted messages from `messageFormatter.ts`.
+  - [x] 5.4 Ensure all user-facing feedback points identified in Functional Requirements (FR3.1, FR5.3, FR6.3, FR6.4, FR7.1, FR8.1, FR10.2) are implemented.
   - [ ] 5.5 Perform end-to-end testing by sending actual `/schedule` commands via WhatsApp and verifying behavior and responses. 

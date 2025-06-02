@@ -60,6 +60,39 @@ npm run dev
 
 - `DATABASE_URL`: PostgreSQL connection string
 - `WHITELISTED_NUMBERS`: Comma-separated list of phone numbers allowed to use the bot
+- `CRON_SECRET`: A secure random string used to authenticate cron job requests. Must be set both in your local `.env` file and in your Vercel project settings.
+
+## Cron Job Configuration
+
+The bot uses Vercel Cron to process scheduled messages every minute. The cron job is configured in `vercel.json`:
+
+```json
+{
+  "crons": [{
+    "path": "/api/cron/process-scheduled-messages",
+    "schedule": "* * * * *"
+  }]
+}
+```
+
+Make sure to:
+1. Set up `CRON_SECRET` in your Vercel project settings
+2. Deploy the project to Vercel to activate the cron job
+3. Monitor the Vercel logs to ensure the cron job is running correctly
+
+## Development
+
+1. Clone the repository
+2. Install dependencies: `npm install`
+3. Create a `.env` file with the required environment variables
+4. Run the development server: `npm run dev`
+
+## Testing
+
+Run the test suite:
+```bash
+npm test
+```
 
 ## Contributing
 

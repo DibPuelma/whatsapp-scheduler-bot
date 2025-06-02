@@ -23,6 +23,7 @@
     "@trpc/server": "^11.1.4",
     "@whiskeysockets/baileys": "^6.7.17",
     "chrono-node": "^2.8.2",
+    "date-fns-tz": "^3.2.0",
     "jimp": "^0.16.13",
     "keyv": "^5.3.3",
     "link-preview-js": "^3.1.0",
