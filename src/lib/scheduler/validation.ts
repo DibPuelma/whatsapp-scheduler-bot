@@ -60,7 +60,7 @@ export function isValidDateTimeFormat(dateTime: string): boolean {
   const specificDateTimeRegex = /^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}$/;
   
   // Time only format: HH:MM
-  const timeOnlyRegex = /^\d{2}:\d{2}$/;
+  const timeOnlyRegex = /^([01]\d|2[0-3]):[0-5]\d$|^24:00$/;
   
   // Tomorrow format: mañana HH:MM
   const tomorrowRegex = /^mañana\s\d{2}:\d{2}$/;

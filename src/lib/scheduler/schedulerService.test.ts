@@ -1,4 +1,4 @@
-import { PrismaClient } from '@prisma/client';
+import { PrismaClient } from '@/generated/prisma';
 import { 
   createScheduledMessage, 
   CreateScheduledMessageParams, 
@@ -11,33 +11,41 @@ import {
 } from './schedulerService';
 
 // Mock PrismaClient
-jest.mock('@prisma/client', () => {
-  const mockCreate = jest.fn();
-  const mockCount = jest.fn();
-  const mockFindMany = jest.fn();
-  const mockUpdate = jest.fn();
+jest.mock('@/generated/prisma', () => {
+  const mockFns = {
+    create: jest.fn().mockImplementation(() => Promise.resolve()),
+    count: jest.fn().mockImplementation(() => Promise.resolve(0)),
+    findMany: jest.fn().mockImplementation(() => Promise.resolve([])),
+    update: jest.fn().mockImplementation(() => Promise.resolve()),
+  };
+
   return {
     PrismaClient: jest.fn().mockImplementation(() => ({
-      scheduledMessage: {
-        create: mockCreate,
-        count: mockCount,
-        findMany: mockFindMany,
-        update: mockUpdate
-      }
+      scheduledMessage: mockFns,
+      $connect: jest.fn(),
+      $disconnect: jest.fn()
     }))
   };
 });
 
 describe('schedulerService', () => {
   let prisma: jest.Mocked<PrismaClient>;
+  let mockFns: {
+    create: jest.Mock;
+    count: jest.Mock;
+    findMany: jest.Mock;
+    update: jest.Mock;
+  };
 
   beforeEach(() => {
     // Clear all mocks before each test
     jest.clearAllMocks();
     prisma = new PrismaClient() as jest.Mocked<PrismaClient>;
+    mockFns = prisma.scheduledMessage as unknown as typeof mockFns;
   });
 
   describe('createScheduledMessage', () => {
+    const futureDate = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours from now
     const testParams: CreateScheduledMessageParams = {
       userId: 'mock-user-123',
       recipient: {
@@ -68,14 +76,14 @@ describe('schedulerService', () => {
 
     it('should create a scheduled message when under the limit', async () => {
       // Setup mock implementation
-      prisma.scheduledMessage.count.mockResolvedValue(5); // Under the limit
-      prisma.scheduledMessage.create.mockResolvedValue(mockCreatedMessage);
+      mockFns.count.mockResolvedValue(5); // Under the limit
+      mockFns.create.mockResolvedValue(mockCreatedMessage);
 
       // Call the function
       const result = await createScheduledMessage(testParams);
 
       // Verify the count call
-      expect(prisma.scheduledMessage.count).toHaveBeenCalledWith({
+      expect(mockFns.count).toHaveBeenCalledWith({
         where: {
           userId: testParams.userId,
           status: 'PENDING'
@@ -83,7 +91,7 @@ describe('schedulerService', () => {
       });
 
       // Verify the create call
-      expect(prisma.scheduledMessage.create).toHaveBeenCalledWith({
+      expect(mockFns.create).toHaveBeenCalledWith({
         data: {
           userId: testParams.userId,
           recipientIdentifier: testParams.recipient.phoneNumber,
@@ -105,13 +113,13 @@ describe('schedulerService', () => {
 
     it('should return error when pending message limit is reached', async () => {
       // Setup mock implementation
-      prisma.scheduledMessage.count.mockResolvedValue(MAX_PENDING_MESSAGES); // At the limit
+      mockFns.count.mockResolvedValue(MAX_PENDING_MESSAGES); // At the limit
 
       // Call the function
       const result = await createScheduledMessage(testParams);
 
       // Verify the count call
-      expect(prisma.scheduledMessage.count).toHaveBeenCalledWith({
+      expect(mockFns.count).toHaveBeenCalledWith({
         where: {
           userId: testParams.userId,
           status: 'PENDING'
@@ -119,7 +127,7 @@ describe('schedulerService', () => {
       });
 
       // Verify no create call was made
-      expect(prisma.scheduledMessage.create).not.toHaveBeenCalled();
+      expect(mockFns.create).not.toHaveBeenCalled();
 
       // Verify the result
       expect(result).toEqual({
@@ -135,7 +143,7 @@ describe('schedulerService', () => {
 
     it('should throw an error if database operation fails', async () => {
       const mockError = new Error('Database error');
-      prisma.scheduledMessage.count.mockRejectedValue(mockError);
+      mockFns.count.mockRejectedValue(mockError);
 
       await expect(createScheduledMessage(testParams)).rejects.toThrow('Database error');
     });
@@ -147,13 +155,13 @@ describe('schedulerService', () => {
       const expectedCount = 3;
 
       // Setup mock implementation
-      prisma.scheduledMessage.count.mockResolvedValue(expectedCount);
+      mockFns.count.mockResolvedValue(expectedCount);
 
       // Call the function
       const result = await countPendingMessages(userId);
 
       // Verify the count call
-      expect(prisma.scheduledMessage.count).toHaveBeenCalledWith({
+      expect(mockFns.count).toHaveBeenCalledWith({
         where: {
           userId,
           status: 'PENDING'
@@ -167,7 +175,7 @@ describe('schedulerService', () => {
     it('should throw an error if database operation fails', async () => {
       const userId = 'user123@s.whatsapp.net';
       const mockError = new Error('Database error');
-      prisma.scheduledMessage.count.mockRejectedValue(mockError);
+      mockFns.count.mockRejectedValue(mockError);
 
       await expect(countPendingMessages(userId)).rejects.toThrow('Database error');
     });
@@ -206,13 +214,13 @@ describe('schedulerService', () => {
 
     it('should return due messages ordered by timestamp', async () => {
       // Setup mock implementation
-      prisma.scheduledMessage.findMany.mockResolvedValue(mockDueMessages);
+      mockFns.findMany.mockResolvedValue(mockDueMessages);
 
       // Call the function
       const result = await getDueMessages();
 
       // Verify the findMany call
-      expect(prisma.scheduledMessage.findMany).toHaveBeenCalledWith({
+      expect(mockFns.findMany).toHaveBeenCalledWith({
         where: {
           status: 'PENDING',
           scheduledTimestampUTC: {
@@ -231,13 +239,13 @@ describe('schedulerService', () => {
 
     it('should return empty array when no messages are due', async () => {
       // Setup mock implementation
-      prisma.scheduledMessage.findMany.mockResolvedValue([]);
+      mockFns.findMany.mockResolvedValue([]);
 
       // Call the function
       const result = await getDueMessages();
 
       // Verify the findMany call was made
-      expect(prisma.scheduledMessage.findMany).toHaveBeenCalled();
+      expect(mockFns.findMany).toHaveBeenCalled();
 
       // Verify the result
       expect(result).toEqual([]);
@@ -245,7 +253,7 @@ describe('schedulerService', () => {
 
     it('should throw an error if database operation fails', async () => {
       const mockError = new Error('Database error');
-      prisma.scheduledMessage.findMany.mockRejectedValue(mockError);
+      mockFns.findMany.mockRejectedValue(mockError);
 
       await expect(getDueMessages()).rejects.toThrow('Database error');
     });
@@ -272,13 +280,13 @@ describe('schedulerService', () => {
       const updatedMessage = { ...mockMessage, status: newStatus };
 
       // Setup mock implementation
-      prisma.scheduledMessage.update.mockResolvedValue(updatedMessage);
+      mockFns.update.mockResolvedValue(updatedMessage);
 
       // Call the function
       const result = await updateMessageStatus(jobId, newStatus);
 
       // Verify the update call
-      expect(prisma.scheduledMessage.update).toHaveBeenCalledWith({
+      expect(mockFns.update).toHaveBeenCalledWith({
         where: { jobId },
         data: { status: newStatus }
       });
@@ -292,7 +300,7 @@ describe('schedulerService', () => {
       const newStatus: MessageStatus = 'SENT';
 
       // Setup mock implementation
-      prisma.scheduledMessage.update.mockResolvedValue(null);
+      mockFns.update.mockResolvedValue(null);
 
       // Call the function and expect error
       await expect(updateMessageStatus(jobId, newStatus)).rejects.toThrow(
@@ -306,7 +314,7 @@ describe('schedulerService', () => {
       const mockError = new Error('Database error');
 
       // Setup mock implementation
-      prisma.scheduledMessage.update.mockRejectedValue(mockError);
+      mockFns.update.mockRejectedValue(mockError);
 
       // Call the function and expect error
       await expect(updateMessageStatus(jobId, newStatus)).rejects.toThrow('Database error');

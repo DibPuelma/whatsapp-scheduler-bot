@@ -16,7 +16,7 @@ describe('parseDateTimeToUTC', () => {
 
     const validCases = [
       {
-        input: '2024-12-25 10:30',
+        input: '25/12/2024 10:30',
         description: 'specific date and time'
       },
       {
@@ -36,8 +36,8 @@ describe('parseDateTimeToUTC', () => {
         description: 'midnight using 00:00'
       },
       {
-        input: 'mañana 24:00',
-        description: 'midnight using 24:00'
+        input: 'mañana 00:00',
+        description: 'midnight (normalized from 24:00)'
       },
       {
         input: 'mañana 12:00',
@@ -65,11 +65,10 @@ describe('parseDateTimeToUTC', () => {
       const result = parseDateTimeToUTC('mañana 24:00', mockMessage);
       expect(result.success).toBe(true);
       if (result.success) {
-        const nextDay = new Date(baseTimestamp * 1000);
-        nextDay.setDate(nextDay.getDate() + 1);
-        nextDay.setHours(0, 0, 0, 0);
-        expect(result.data.utcTimestamp.getHours()).toBe(0);
-        expect(result.data.utcTimestamp.getMinutes()).toBe(0);
+        // When it's 00:00 (midnight) in Chile, it's 04:00 UTC
+        const expectedUtcTime = new Date('2024-03-16T04:00:00Z').getTime();
+        expect(result.data.utcTimestamp.getTime()).toBe(expectedUtcTime);
+        expect(result.data.originalString).toBe('mañana 00:00');
       }
     });
 
@@ -77,10 +76,9 @@ describe('parseDateTimeToUTC', () => {
       const result = parseDateTimeToUTC('mañana 12:00', mockMessage);
       expect(result.success).toBe(true);
       if (result.success) {
-        const date = result.data.utcTimestamp;
-        // 12:00 should be preserved as noon (12 PM)
-        expect(date.getHours()).toBe(12);
-        expect(date.getMinutes()).toBe(0);
+        // When it's 12:00 (noon) in Chile, it's 16:00 UTC
+        const expectedUtcTime = new Date('2024-03-16T16:00:00Z').getTime();
+        expect(result.data.utcTimestamp.getTime()).toBe(expectedUtcTime);
       }
     });
 
@@ -88,10 +86,9 @@ describe('parseDateTimeToUTC', () => {
       const result = parseDateTimeToUTC('mañana 12:30', mockMessage);
       expect(result.success).toBe(true);
       if (result.success) {
-        const date = result.data.utcTimestamp;
-        // 12:30 should be preserved as 12:30 PM
-        expect(date.getHours()).toBe(12);
-        expect(date.getMinutes()).toBe(30);
+        // When it's 12:30 in Chile, it's 16:30 UTC
+        const expectedUtcTime = new Date('2024-03-16T16:30:00Z').getTime();
+        expect(result.data.utcTimestamp.getTime()).toBe(expectedUtcTime);
       }
     });
   });
@@ -112,7 +109,7 @@ describe('parseDateTimeToUTC', () => {
         description: 'invalid format'
       },
       {
-        input: '2024-03-14 10:00',
+        input: '14/03/2024 10:00',
         expectedType: 'PAST_DATE',
         description: 'past date'
       },
@@ -122,14 +119,14 @@ describe('parseDateTimeToUTC', () => {
         description: 'past relative day'
       },
       {
-        input: 'mañana 25:00',
-        expectedType: 'INVALID_HOUR',
-        description: 'hour > 24'
-      },
-      {
         input: 'mañana -1:00',
         expectedType: 'INVALID_HOUR',
         description: 'negative hour'
+      },
+      {
+        input: 'mañana 25:00',
+        expectedType: 'INVALID_HOUR',
+        description: 'hour > 24'
       },
       {
         input: 'mañana 12:60',
@@ -154,15 +151,13 @@ describe('parseDateTimeToUTC', () => {
       const baseTimestamp = Math.floor(new Date('2024-03-15T10:00:00Z').getTime() / 1000);
       const mockMessage = createMockMessage(baseTimestamp);
 
-      // Parse a time that's specified in the user's local timezone
-      const result = parseDateTimeToUTC('2024-03-15 15:00', mockMessage);
+      // Parse a time that's specified in Chile's timezone (UTC-4)
+      const result = parseDateTimeToUTC('16/03/2024 15:00', mockMessage);
       
       expect(result.success).toBe(true);
       if (result.success) {
-        // The resulting UTC time should be adjusted by the user's timezone offset
-        const localOffset = new Date(baseTimestamp * 1000).getTimezoneOffset();
-        const expectedUtcTime = new Date('2024-03-15T15:00:00').getTime() + localOffset * 60 * 1000;
-        
+        // When it's 15:00 in Chile, it's 19:00 UTC
+        const expectedUtcTime = new Date('2024-03-16T19:00:00Z').getTime();
         expect(result.data.utcTimestamp.getTime()).toBe(expectedUtcTime);
       }
     });
@@ -175,14 +170,8 @@ describe('parseDateTimeToUTC', () => {
       
       expect(result.success).toBe(true);
       if (result.success) {
-        const nextDay = new Date(baseTimestamp * 1000);
-        nextDay.setDate(nextDay.getDate() + 1);
-        nextDay.setHours(0, 0, 0, 0);
-        
-        // The UTC time should be midnight in the user's timezone
-        const localOffset = new Date(baseTimestamp * 1000).getTimezoneOffset();
-        const expectedUtcTime = nextDay.getTime() + localOffset * 60 * 1000;
-        
+        // When it's 00:00 (midnight) in Chile on March 16, it's 04:00 UTC on March 16
+        const expectedUtcTime = new Date('2024-03-16T04:00:00Z').getTime();
         expect(result.data.utcTimestamp.getTime()).toBe(expectedUtcTime);
       }
     });

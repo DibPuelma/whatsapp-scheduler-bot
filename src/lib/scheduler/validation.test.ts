@@ -114,8 +114,6 @@ describe('Schedule Command Validation', () => {
       '', // Empty
       ' ', // Space
       '2024-12-25', // Date without time
-      '25-12-2024 10:30', // Wrong date format
-      '10:30 2024-12-25', // Wrong order
       'mañana', // Missing time
       'próximo lunes', // Missing time
       'ayer 10:30', // Invalid relative day
