@@ -11,6 +11,7 @@ import {
 } from '@/constants/messages';
 import { handleViewMessages } from './handlers/viewMessages';
 import { parseViewMessageRequest } from '@/utils/messageViewParser';
+import fetch from 'node-fetch';
 
 // Constants
 const BOT_PORT = 3001;
@@ -33,10 +34,25 @@ async function getConnectionStateFromAPI() {
       return { isConnected: false, isConnecting: false, hasQRCode: false, lastError: `API error: ${response.status}` };
     }
     
-    const data = await response.json();
+    const data = await response.json() as { 
+      result: { 
+        data: { 
+          json: {
+            success: boolean;
+            isConnected: boolean;
+            isConnecting: boolean;
+            hasQRCode: boolean;
+            lastError: string | null;
+            error?: string;
+          }
+        } 
+      } 
+    }[];
+    
+    console.log('Raw API response:', JSON.stringify(data, null, 2));
     
     // Handle TRPC response format
-    const result = data[0]?.result?.data;
+    const result = data[0]?.result?.data?.json;
     if (result && result.success) {
       return {
         isConnected: result.isConnected || false,
@@ -46,11 +62,15 @@ async function getConnectionStateFromAPI() {
       };
     } else {
       console.error('API returned error:', result?.error || 'Unknown error');
+      console.error('Full result:', JSON.stringify(result, null, 2));
       return { isConnected: false, isConnecting: false, hasQRCode: false, lastError: result?.error || 'API error' };
     }
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error';
     console.error('Failed to get connection state from API:', errorMessage);
+    if (error instanceof Error && error.stack) {
+      console.error('Error stack:', error.stack);
+    }
     return { isConnected: false, isConnecting: false, hasQRCode: false, lastError: 'API call failed' };
   }
 }
