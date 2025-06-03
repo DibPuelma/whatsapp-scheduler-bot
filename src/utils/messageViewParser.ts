@@ -46,6 +46,7 @@ function isValidMessageString(message: string): boolean {
 function containsInvalidPatterns(message: string): boolean {
   // Check for potential SQL injection or script patterns
   const invalidPatterns = [
+    /drop\s+table/i,
     /select\s+.*\s+from/i,
     /insert\s+into/i,
     /update\s+.*\s+set/i,
@@ -74,6 +75,9 @@ export function parseViewMessageRequest(message: string): ViewMessageIntent {
       error: INVALID_VIEW_REQUEST
     };
   }
+
+  console.log('message', message);
+  console.log('containsInvalidPatterns', containsInvalidPatterns(message));
 
   // Security validation
   if (containsInvalidPatterns(message)) {

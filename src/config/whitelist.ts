@@ -4,7 +4,5 @@ export const WHITELISTED_NUMBERS = "+56989010221"
 
 // Function to check if a phone number is whitelisted (for receiving messages/basic bot interaction)
 export function isWhitelisted(phoneNumber: string): boolean {
-  console.log({env: process.env.WHITELISTED_NUMBERS})
-  console.log({WHITELISTED_NUMBERS})
   return WHITELISTED_NUMBERS.split(',').includes(phoneNumber);
 } 

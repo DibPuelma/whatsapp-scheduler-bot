@@ -15,7 +15,6 @@ export async function POST(request: NextRequest) {
   }
 
   const authHeader = request.headers.get('authorization');
-  console.log({authHeader, cronSecret})
   if (!authHeader || authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json(
       { error: 'Unauthorized' },
