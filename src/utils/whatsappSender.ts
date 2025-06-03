@@ -79,7 +79,7 @@ async function sendMessageViaAPI(targetJid: string, content: string, retries = M
  * @param phoneNumber Phone number in international format (e.g., +56912345678)
  * @returns WhatsApp JID (e.g., 56912345678@s.whatsapp.net)
  */
-function formatToJID(phoneNumber: string): string {
+export function formatToJID(phoneNumber: string): string {
   // Remove the '+' prefix and append the WhatsApp suffix
   return `${phoneNumber.replace('+', '')}@s.whatsapp.net`;
 }
