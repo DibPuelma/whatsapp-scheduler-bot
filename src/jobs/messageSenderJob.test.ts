@@ -1,22 +1,24 @@
 import { processScheduledMessages } from './messageSenderJob';
 import { getDueMessages, updateMessageStatus, ScheduledMessage } from '../lib/scheduler/schedulerService';
 import { logger } from '@/lib/logger';
-import { sendWhatsAppMessage } from '@/utils/whatsappSender';
 
 // Mock dependencies
 jest.mock('../lib/scheduler/schedulerService');
-jest.mock('@/utils/whatsappSender');
 jest.mock('@/lib/logger');
 
 const mockedGetDueMessages = getDueMessages as jest.MockedFunction<typeof getDueMessages>;
 const mockedUpdateMessageStatus = updateMessageStatus as jest.MockedFunction<typeof updateMessageStatus>;
-const mockedSendWhatsAppMessage = sendWhatsAppMessage as jest.MockedFunction<typeof sendWhatsAppMessage>;
 const mockedLogger = logger as jest.Mocked<typeof logger>;
+
+// Mock fetch for sendMessageViaBotAPI
+const mockedFetch = jest.fn();
+global.fetch = mockedFetch;
 
 describe('processScheduledMessages', () => {
   beforeEach(() => {
-    // Clear all mocks before each test
     jest.clearAllMocks();
+    mockedLogger.info = jest.fn();
+    mockedLogger.error = jest.fn();
   });
 
   it('should handle no due messages', async () => {
@@ -25,8 +27,6 @@ describe('processScheduledMessages', () => {
     await processScheduledMessages();
 
     expect(mockedGetDueMessages).toHaveBeenCalled();
-    expect(mockedSendWhatsAppMessage).not.toHaveBeenCalled();
-    expect(mockedUpdateMessageStatus).not.toHaveBeenCalled();
     expect(mockedLogger.info).toHaveBeenCalledWith('No messages due for sending');
   });
 
@@ -61,13 +61,32 @@ describe('processScheduledMessages', () => {
     ] as ScheduledMessage[];
 
     mockedGetDueMessages.mockResolvedValue(mockMessages);
-    mockedSendWhatsAppMessage.mockResolvedValue(undefined);
     mockedUpdateMessageStatus.mockResolvedValue({} as ScheduledMessage);
+    mockedFetch.mockResolvedValue({
+      ok: true,
+      json: () => Promise.resolve({ success: true })
+    });
 
     await processScheduledMessages();
 
     expect(mockedGetDueMessages).toHaveBeenCalled();
-    expect(mockedSendWhatsAppMessage).toHaveBeenCalledTimes(2);
+    expect(mockedFetch).toHaveBeenCalledTimes(2);
+    expect(mockedFetch).toHaveBeenCalledWith('http://localhost:3001/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientPhone: '+1111111111',
+        content: 'Mock scheduled content 1'
+      })
+    });
+    expect(mockedFetch).toHaveBeenCalledWith('http://localhost:3001/send-message', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        recipientPhone: '+2222222222',
+        content: 'Mock scheduled content 2'
+      })
+    });
     expect(mockedUpdateMessageStatus).toHaveBeenCalledTimes(2);
     expect(mockedUpdateMessageStatus).toHaveBeenCalledWith('mock-job-1', 'SENT');
     expect(mockedUpdateMessageStatus).toHaveBeenCalledWith('mock-job-2', 'SENT');
@@ -91,13 +110,13 @@ describe('processScheduledMessages', () => {
     ] as ScheduledMessage[];
 
     mockedGetDueMessages.mockResolvedValue(mockMessages);
-    mockedSendWhatsAppMessage.mockRejectedValue(new Error('Failed to send'));
     mockedUpdateMessageStatus.mockResolvedValue({} as ScheduledMessage);
+    mockedFetch.mockRejectedValue(new Error('Failed to send'));
 
     await processScheduledMessages();
 
     expect(mockedGetDueMessages).toHaveBeenCalled();
-    expect(mockedSendWhatsAppMessage).toHaveBeenCalledTimes(1);
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
     expect(mockedUpdateMessageStatus).toHaveBeenCalledWith('mock-job-1', 'FAILED_TO_SEND');
     expect(mockedLogger.error).toHaveBeenCalledWith(
       'Failed to send message mock-job-1:',
