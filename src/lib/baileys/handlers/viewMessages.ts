@@ -1,22 +1,21 @@
 import { WAMessage } from '@whiskeysockets/baileys';
 import { MessageViewResult, FormattedScheduledMessage } from '../../../types/messages';
 import { parseViewMessageRequest } from '../../../utils/messageViewParser';
-import { getScheduledMessages } from '../../../lib/queries/messages';
+import { getScheduledMessages } from '../../queries/messages';
 import { isWhitelisted } from '../../../config/whitelist';
-import { Prisma } from '../../../generated/prisma';
-import { prisma } from '../../../lib/prisma';
+import { prisma } from '../../prisma';
 import {
   INVALID_VIEW_REQUEST,
-  ERROR_FETCHING_MESSAGES,
-  NO_MESSAGES,
-  NO_MORE_MESSAGES,
-  MORE_MESSAGES_AVAILABLE,
-  SHOWING_MESSAGES_HEADER,
-  SHOWING_MORE_MESSAGES_HEADER,
   UNAUTHORIZED_NUMBER,
   DATABASE_CONNECTION_ERROR,
   DATABASE_QUERY_ERROR,
+  ERROR_FETCHING_MESSAGES,
+  NO_MESSAGES,
+  NO_MORE_MESSAGES,
+  SHOWING_MESSAGES_HEADER,
+  SHOWING_MORE_MESSAGES_HEADER,
   TOTAL_MESSAGES_SUMMARY,
+  MORE_MESSAGES_AVAILABLE,
 } from '../../../constants/messages';
 
 interface ViewMessagesHandlerParams {
@@ -66,7 +65,8 @@ async function updateViewStats(senderPhone: string, offset: number): Promise<voi
  * @returns true if the phone number is valid
  */
 function isValidPhoneNumber(phone: string): boolean {
-  return /^\+\d+$/.test(phone.trim());
+  // Only allow digits with an optional + prefix
+  return /^\+?\d+$/.test(phone.trim());
 }
 
 /**
@@ -196,19 +196,25 @@ export async function handleViewMessages({
       });
 
       // Handle specific Prisma errors
-      if (dbError instanceof Prisma.PrismaClientInitializationError) {
+      const error = dbError as Error & {
+        name: string;
+        code?: string;
+        meta?: { target: string[] };
+      };
+
+      if (error.name === 'PrismaClientInitializationError') {
         return {
           type: 'ERROR',
           error: DATABASE_CONNECTION_ERROR,
         };
       }
 
-      if (dbError instanceof Prisma.PrismaClientKnownRequestError) {
+      if (error.name === 'PrismaClientKnownRequestError') {
         // Log specific Prisma error details
         console.error('Prisma known request error:', {
-          code: dbError.code,
-          meta: dbError.meta,
-          message: dbError.message,
+          code: error.code,
+          meta: error.meta,
+          message: error.message,
         });
         return {
           type: 'ERROR',

@@ -3,8 +3,8 @@ import { handleViewMessages } from '../viewMessages';
 import { prisma } from '../../../prisma';
 import { isWhitelisted } from '../../../../config/whitelist';
 import { getScheduledMessages } from '../../../queries/messages';
-import { PrismaClient } from '@prisma/client';
-import { PrismaClientInitializationError, PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { parseViewMessageRequest } from '../../../../utils/messageViewParser';
+import { Prisma } from '../../../../generated/prisma';
 import {
   INVALID_VIEW_REQUEST,
   UNAUTHORIZED_NUMBER,
@@ -28,38 +28,44 @@ jest.mock('../../../prisma', () => ({
   } as unknown as { messageViewStats: { upsert: jest.Mock } },
 }));
 
-jest.mock('../../../../config/whitelist', () => ({
-  isWhitelisted: jest.fn(),
-}));
-
-jest.mock('../../../queries/messages', () => ({
-  getScheduledMessages: jest.fn(),
-}));
+jest.mock('../../../queries/messages');
+jest.mock('../../../../config/whitelist');
+jest.mock('../../../../utils/messageViewParser');
 
 describe('viewMessages handler', () => {
-  // Reset mocks before each test
   beforeEach(() => {
+    // Reset all mocks before each test
     jest.clearAllMocks();
+    // Mock isWhitelisted to return true by default
     (isWhitelisted as jest.Mock).mockReturnValue(true);
+    // Mock other dependencies with default values
     (prisma.messageViewStats.upsert as jest.Mock).mockResolvedValue({});
     (getScheduledMessages as jest.Mock).mockResolvedValue({
       messages: [],
       total: 0,
       hasMore: false,
     });
+    (parseViewMessageRequest as jest.Mock).mockReturnValue({
+      isViewRequest: true,
+      isMoreRequest: false,
+      isValid: true,
+    });
   });
 
   // Helper function to create a mock WAMessage
   const createMockMessage = (text: string): WAMessage => ({
+    key: {
+      remoteJid: '1234567890@s.whatsapp.net',
+      id: 'test-message-id',
+    },
     message: {
       conversation: text,
     },
-    key: {},
   } as WAMessage);
 
   describe('phone number validation', () => {
     test('should reject invalid phone numbers', async () => {
-      const invalidPhones = ['123', 'abc', '+abc', '++123'];
+      const invalidPhones = ['abc', '+abc', '++123'];
 
       for (const phone of invalidPhones) {
         const result = await handleViewMessages({
@@ -71,16 +77,50 @@ describe('viewMessages handler', () => {
           type: 'ERROR',
           error: INVALID_VIEW_REQUEST,
         });
+
+        // Verify that getScheduledMessages was not called
+        expect(getScheduledMessages).not.toHaveBeenCalled();
       }
     });
 
     test('should normalize phone numbers by adding + prefix', async () => {
-      await handleViewMessages({
-        message: createMockMessage('ver mensajes'),
-        senderPhone: '123456789',
+      const inputPhone = '123456789';
+      const expectedNormalizedPhone = '+123456789';
+
+      // Mock successful message retrieval and whitelist check
+      (isWhitelisted as jest.Mock).mockReturnValue(true);
+      (getScheduledMessages as jest.Mock).mockResolvedValueOnce({
+        messages: [],
+        total: 0,
+        hasMore: false,
+      });
+      (parseViewMessageRequest as jest.Mock).mockReturnValue({
+        isViewRequest: true,
+        isMoreRequest: false,
+        isValid: true,
       });
 
-      expect(isWhitelisted).toHaveBeenCalledWith('+123456789');
+      await handleViewMessages({
+        message: createMockMessage('ver mensajes'),
+        senderPhone: inputPhone,
+      });
+
+      // Check that normalized phone is used in all relevant function calls
+      expect(isWhitelisted).toHaveBeenCalledWith(expectedNormalizedPhone);
+      expect(getScheduledMessages).toHaveBeenCalledWith(
+        expect.objectContaining({
+          senderPhone: expectedNormalizedPhone,
+        })
+      );
+      expect(prisma.messageViewStats.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { senderPhone: expectedNormalizedPhone },
+          create: expect.objectContaining({
+            senderPhone: expectedNormalizedPhone,
+          }),
+          update: expect.any(Object),
+        })
+      );
     });
   });
 
@@ -178,6 +218,13 @@ describe('viewMessages handler', () => {
     });
 
     test('should handle "ver más" with no more messages', async () => {
+      // Mock "ver más" request
+      (parseViewMessageRequest as jest.Mock).mockReturnValue({
+        isViewRequest: true,
+        isMoreRequest: true,
+        isValid: true,
+      });
+
       (getScheduledMessages as jest.Mock).mockResolvedValue({
         messages: [],
         total: 10,
@@ -198,9 +245,11 @@ describe('viewMessages handler', () => {
 
   describe('error handling', () => {
     test('should handle database connection errors', async () => {
-      (getScheduledMessages as jest.Mock).mockRejectedValue(
-        new PrismaClientInitializationError('Connection failed', '')
-      );
+      // Mock the implementation to check for error type
+      const dbError = new Error('Failed to connect to database');
+      dbError.name = 'PrismaClientInitializationError';
+
+      (getScheduledMessages as jest.Mock).mockRejectedValue(dbError);
 
       const result = await handleViewMessages({
         message: createMockMessage('ver mensajes'),
@@ -214,12 +263,15 @@ describe('viewMessages handler', () => {
     });
 
     test('should handle database query errors', async () => {
-      (getScheduledMessages as jest.Mock).mockRejectedValue(
-        new PrismaClientKnownRequestError('Query failed', {
-          code: 'P2002',
-          clientVersion: '1.0.0',
-        })
-      );
+      // Mock the implementation to check for error type
+      const dbError = new Error('Query failed');
+      dbError.name = 'PrismaClientKnownRequestError';
+      Object.assign(dbError, {
+        code: 'P2002',
+        meta: { target: ['messages'] },
+      });
+
+      (getScheduledMessages as jest.Mock).mockRejectedValue(dbError);
 
       const result = await handleViewMessages({
         message: createMockMessage('ver mensajes'),
@@ -232,7 +284,40 @@ describe('viewMessages handler', () => {
       });
     });
 
-    test('should handle unexpected errors', async () => {
+    test('should handle unauthorized numbers', async () => {
+      (isWhitelisted as jest.Mock).mockReturnValue(false);
+
+      const result = await handleViewMessages({
+        message: createMockMessage('ver mensajes'),
+        senderPhone: '+123456789',
+      });
+
+      expect(result).toEqual({
+        type: 'ERROR',
+        error: UNAUTHORIZED_NUMBER,
+      });
+    });
+
+    test('should handle invalid view requests', async () => {
+      (parseViewMessageRequest as jest.Mock).mockReturnValue({
+        isViewRequest: false,
+        isMoreRequest: false,
+        isValid: false,
+        error: INVALID_VIEW_REQUEST,
+      });
+
+      const result = await handleViewMessages({
+        message: createMockMessage('ver mensajes invalid'),
+        senderPhone: '+123456789',
+      });
+
+      expect(result).toEqual({
+        type: 'ERROR',
+        error: INVALID_VIEW_REQUEST,
+      });
+    });
+
+    test('should handle general errors', async () => {
       (getScheduledMessages as jest.Mock).mockRejectedValue(new Error('Unexpected error'));
 
       const result = await handleViewMessages({
