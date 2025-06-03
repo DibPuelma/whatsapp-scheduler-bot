@@ -39,3 +39,5 @@ next-env.d.ts
 .auth/
 
 /src/generated/prisma
+*dist/*
+.cursor
